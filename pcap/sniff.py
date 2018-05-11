@@ -3,20 +3,38 @@ import sys, getopt
 import netifaces
 import requests
 import time
+
+
+import json
+
+import scapy2dict
+
 millis = int(round(time.time() * 1000))
 sessionName = 'SESSION_' + str(millis)
 URL = 'https://us-central1-stable-house-183720.cloudfunctions.net/pktCtr?sessionName=' +sessionName;
+
+def walk_dict(d):
+    for key, value in d.items():
+        if isinstance(value, dict):
+            walk_dict(value)
+        else:
+            if isinstance(value, bytes):
+                d[key] = value.decode('utf-8')
+
+
 def callback():
     def process(pkt):
-        print('Pkt!')
+        payload = scapy2dict.to_dict(pkt, strict=True)
+        walk_dict(payload)
+        print(json.dumps(payload, sort_keys=True, indent = 4, separators=(',',':'), ensure_ascii=False))
         try:
-            requests.get(URL, timeout=10)
+            #requests.post(URL, data = payload, timeout=10)
+            time.sleep(10)
         except Exception as e:
             print("Error occurred: " + str(e));
             sys.exit(0)
 
     return process
-
 
 
 def get_local_ip(interface_name):
@@ -66,9 +84,9 @@ def main(argv):
     # interface = get_default_interface() if interface_name is '' else interface_name
     interface = get_default_interface()
     local_ip = get_local_ip(interface)
-    # bpf_filt = 'udp src port 53 && ip dst {0}'.format(local_ip) if (bpf_expr is '') else bpf_expr
+    bpf_filt = 'udp src port 53'
     print('Sniffing session: ' + str(sessionName))
-    sniff(iface=interface, prn=callback())
+    sniff(iface=interface, filter=bpf_filt, prn=callback())
     # else:
     #     sniff(offline=trace_file, iface=interface, filter=bpf_filt, prn=callback(map, local_ip))
 
