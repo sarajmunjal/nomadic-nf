@@ -25,28 +25,13 @@ exports.pktCtr = (req, res) => {
 
 function store_packet_signature(pkt){
     
-    dst   = pkt.IP.dst;
-    sport = pkt.UDP.sport;
-    dport = pkt.UDP.dport;
-    tx_id = pkt.DNS.id;
-    q_url = pkt.DNS.qd['DNS Question Record'].qname;
+    key   = pkt['tx_id']+'--'+pkt['q_url'];
 
-    rdata = pkt['DNS Resource Record'].rdata;
-    key   = tx_id+'--'+q_url;
-
-    value = {
-            'dst'  : dst,
-            'sport': sport,
-            'dport': dport,
-            'tx_id': tx_id,
-            'q_url': q_url,
-            'rdata': rdata
-        };
-
-    
     //return value;
+    console.log("Key: " + key);
+    console.log("Pkt: " + pkt);
 
-    client.set(key, JSON.stringify(value), function (err, res) { return res});
+    client.set(key, JSON.stringify(pkt), function (err, res) { return res});
 }
 
 /*
@@ -56,16 +41,16 @@ const app = express();
 
 exports.dnsdetect = (req, res) => {
     pkt = req.body;
-    tx_id = pkt.DNS.id;
-    q_url = pkt.DNS.qd['DNS Question Record'].qname;
+    tx_id = pkt['tx_id'];
+    q_url = pkt['q_url'];
     key = tx_id+'--'+q_url;
     op = JSON.parse(client.get(key));
-    if (op.dst == pkt.IP.dst){
-        if (op.sport == pkt.UDP.sport){
-            if (op.dport == pkt.UDP.dport){
-                if (op.rdata != pkt['DNS Resource Record'].rdata){
-                    if (op.tx_id == pkt.DNS.id){
-                        if (op.DNS.q_url == pkt.DNS.qd['DNS Question Record'].qname){
+    if (op.dst == pkt['dst']){
+        if (op.sport == pkt['sport']){
+            if (op.dport == pkt['dport']){
+                if (op.rdata != pkt['rdata']){
+                    if (op.tx_id == pkt['tx_id']){
+                        if (op.DNS.q_url == pkt['q_url']){
                             /*print(str(datetime.datetime.now())+ "  DNS poisoning attempt")
                             print("TXID %s Request URL %s"%( op[DNS].id, op[DNS].qd.qname.decode('utf-8').rstrip('.')))
                             print("Answer1 [%s]"%op[DNSRR].rdata)
@@ -83,6 +68,25 @@ exports.dnsdetect = (req, res) => {
     value = store_packet_signature(pkt);
 
     res.send('Latest Test : '+ JSON.stringify(op));
+};
+
+exports.receive_tcp_flow = (req, res) => {
+    
+    flow = req.body;
+    flow_size = 0
+    flow.forEach(function(packet) {
+        
+        flow_size += parseInt(packet.size);
+        
+    });
+
+    res.send("Flow size: " + flow_size);
+};
+
+exports.receive_dns_flow = (req, res) => {
+    
+
+    
 };
 
 

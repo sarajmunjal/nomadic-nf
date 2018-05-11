@@ -4,6 +4,7 @@ from collections import deque
 import datetime
 
 packet_queue = deque(maxlen = 100)
+flow_map = {}
 
 def dns_detect(packet):
     if packet.haslayer(IP) and packet.haslayer(UDP) and packet.haslayer(DNS) and packet.haslayer(DNSRR):
@@ -24,6 +25,7 @@ def dns_detect(packet):
 
 def dns_detect_flow(packet):
     if packet.haslayer(IP) and packet.haslayer(UDP) and packet.haslayer(DNS) and packet.haslayer(DNSRR):
+
         print("Detect FLow")
         new_packet = {
             'dst'  : repr(packet[IP].dst),
@@ -36,8 +38,40 @@ def dns_detect_flow(packet):
 
         packet_queue.append(new_packet)
 
+def get_tcp_packet_dict(packet):
+    packet_dict = {
+        'src'  : repr(packet[IP].src),
+        'dst'  : repr(packet[IP].dst),
+        'sport': repr(packet[IP].sport),
+        'dport': repr(packet[IP].dport),
+        'flags': repr(packet[TCP].flags),
+        'size' : repr(len(packet))
+    }
+    return packet_dict
+
+def dns_detect_tcp_flow(packet):
+    if packet.haslayer(IP) and packet.haslayer(TCP):
+        flow_key_1 = repr(packet[IP].sport) + repr(packet[IP].dport)
+        flow_key_2 = repr(packet[IP].dport) + repr(packet[IP].sport)
 
 
+        if flow_key_1 in flow_map or flow_key_2 in flow_map:
+            
+            if flow_key_1 in flow_map:
+                flow_map[flow_key_1].append(get_tcp_packet_dict(packet))
+            
+            if flow_key_2 in flow_map:
+                flow_map[flow_key_2].append(get_tcp_packet_dict(packet))
+
+        else:
+            flow_map[flow_key_1] = [get_tcp_packet_dict(packet)]
+
+def send_flows_to_scheduler(flow_map):
+    for flow in flow_map:
+        flow_size = 0
+        for packet in flow_map[flow]:
+            flow_size += int(packet['size'])
+        print("Flow Size: {}".format(flow_size))
 
 def parse_input_args():
     arg_parser = argparse.ArgumentParser(add_help=False)
@@ -61,8 +95,8 @@ if __name__ == '__main__':
             if interface != None:
                 sniff(iface=interface, store=0, prn=dns_detect)
             elif pcap_file != None:
-                sniff(offline = pcap_file, store=0, prn=dns_detect_flow)
-                print(packet_queue)
+                sniff(offline = pcap_file, store=0, prn=dns_detect_tcp_flow)
+                send_flows_to_scheduler(flow_map)
             else:
                 default_interface = netifaces.gateways()['default'][netifaces.AF_INET][1]
                 sniff(iface = default_interface, store=0, prn=dns_detect)
