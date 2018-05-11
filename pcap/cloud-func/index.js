@@ -1,5 +1,5 @@
 var redis = require("redis"),
-client = redis.createClient('redis://35.185.112.146');
+client = redis.createClient(5262, '35.224.66.131');
 console.log("Connected to redis");
 /*
 exports.pktCtr = (req, res) => {
@@ -46,11 +46,7 @@ function store_packet_signature(pkt){
     
     //return value;
 
-    result = client.set(key, JSON.stringify(value));
-
-    return result;
-
-    
+    client.set(key, JSON.stringify(value), function (err, res) { return res});
 }
 
 /*
