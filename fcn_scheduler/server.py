@@ -10,13 +10,15 @@ from scheduler import schedule_service
 import json
 import argparse
 
+import requests
+
 app = Flask(__name__)
 
 ex_name = 'nomadic-nf'
 scheduler_context = 0
 
 MODE = None
-FLOW_SIZE = None
+FLOW_SIZE = 10
 
 flow_map = {}
 
@@ -42,8 +44,10 @@ def schedule_trigger():
     return trigger_url
 
 def make_flow_request(flow):
-    trigger_url = schedule_trigger()
-    return None
+    FLOW_URL = "https://us-central1-stable-house-183720.cloudfunctions.net/flowfunc"
+    res = requests.post(FLOW_URL, json=flow)
+    print(res.status_code)
+    print(res.text)
 
 def aggregate_flow(packet):
     flow_key_1 = packet['sport'] + packet['dport']
@@ -63,6 +67,14 @@ def aggregate_flow(packet):
 
     else:
         flow_map[flow_key_1] = [packet] 
+
+@app.route("/flowsize", methods=['GET'])
+def get_flow_size():
+    flow_size = {}
+    for flow in flow_map:
+        print(len(flow_map[flow]))
+        flow_size[flow] = str(len(flow_map[flow]))
+    return json.dumps(flow_size, 200, {'ContentType':'application/json'})
 
 @app.route("/test", methods=['POST'])
 def test_route():
@@ -91,6 +103,7 @@ def receive_packet():
 
 @app.route("/flow", methods=['POST'])
 def receive_flow():
+    packet = request.json
     aggregate_flow(packet)
     return json.dumps({'success':True}, 200, {'ContentType':'application/json'})
 

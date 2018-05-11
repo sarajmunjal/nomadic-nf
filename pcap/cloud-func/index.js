@@ -23,28 +23,35 @@ exports.pktCtr = (req, res) => {
 };
 */
 
+//var bodyParser = require('body-parser');
 function store_packet_signature(pkt){
     
     key   = pkt['tx_id']+'--'+pkt['q_url'];
 
     //return value;
-    console.log("Key: " + key);
-    console.log("Pkt: " + pkt);
+    //console.log("Key: " + key);
+    //console.log("Pkt: " + JSON.stringify(pkt));
 
     client.set(key, JSON.stringify(pkt), function (err, res) { return res});
 }
 
-/*
-const express = require('express');
-const app = express();
-*/
-
-exports.dnsdetect = (req, res) => {
+//const express = require('express');
+//const app = express();
+//app.use(bodyParser.json());
+var test_fn = (req, res) => {
+    //console.log(req.body.message);    
+    
+};
+var dnsdetect = (req, res) => {
     pkt = req.body;
-    tx_id = pkt['tx_id'];
+    //console.log(req.body);
+    //console.log(req.body.message);
+    tx_id = pkt["tx_id"];
     q_url = pkt['q_url'];
     key = tx_id+'--'+q_url;
     op = JSON.parse(client.get(key));
+    console.log(op)
+    pois = false;
     if (op.dst == pkt['dst']){
         if (op.sport == pkt['sport']){
             if (op.dport == pkt['dport']){
@@ -57,7 +64,8 @@ exports.dnsdetect = (req, res) => {
                             print("Answer2 [%s]"%packet[DNSRR].rdata)
                             */
                             store_packet_signature(pkt);
-                            res.send("DNS Poisoning Detected");
+                            console.log("DNS Poisoning Detected");
+                            pois = true
                         }
                     }
                 }
@@ -66,11 +74,15 @@ exports.dnsdetect = (req, res) => {
     }
 
     value = store_packet_signature(pkt);
-
-    res.send('Latest Test : '+ JSON.stringify(op));
+    if (pois) {
+        res.send('DNS Poisoning Detected!');
+    }
+    else {
+        res.send('Latest Test : '+ JSON.stringify(op));
+    }
 };
 
-exports.receive_tcp_flow = (req, res) => {
+var receive_tcp_flow = (req, res) => {
     
     flow = req.body;
     flow_size = 0
@@ -79,8 +91,10 @@ exports.receive_tcp_flow = (req, res) => {
         flow_size += parseInt(packet.size);
         
     });
-
-    res.send("Flow size: " + flow_size);
+    var resp = {
+       "flow_size": flow_size
+    };
+    res.send(resp);
 };
 
 exports.receive_dns_flow = (req, res) => {
@@ -89,5 +103,8 @@ exports.receive_dns_flow = (req, res) => {
     
 };
 
-
-//app.listen(8000);
+//app.post('/flowtest', receive_tcp_flow);
+//app.post('/dnstest', dnsdetect);
+//app.listen(5001);
+exports.dnsdetect = dnsdetect;
+exports.flowfunc = receive_tcp_flow

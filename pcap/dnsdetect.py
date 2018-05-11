@@ -95,7 +95,7 @@ if __name__ == '__main__':
             if interface != None:
                 sniff(iface=interface, store=0, prn=dns_detect)
             elif pcap_file != None:
-                sniff(offline = pcap_file, store=0, prn=dns_detect_tcp_flow)
+                sniff(offline = pcap_file, store=0, prn=dns_detect)
                 send_flows_to_scheduler(flow_map)
             else:
                 default_interface = netifaces.gateways()['default'][netifaces.AF_INET][1]
@@ -105,6 +105,6 @@ if __name__ == '__main__':
             if interface != None:
                 sniff(filter=expression, iface=interface, store=0, prn=dns_detect)
             elif pcap_file != None:
-                sniff(filter=expression, offline = pcap_file, store=0, prn=dns_detect_flow)
+                sniff(filter=expression, offline = pcap_file, store=0, prn=dns_detect)
             else:
                 sniff(filter=expression, store=0, prn=dns_detect)
