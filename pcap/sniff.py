@@ -1,95 +1,94 @@
+import argparse
 from scapy.all import *
-import sys, getopt
-import netifaces
-import requests
+from collections import deque
+import datetime
+import numpy as np
 import time
+import requests
+
+start_time = time.time();
+URL = "http://35.224.66.131/packet"
+count =  0
+tot_lat = 0
+lats = []
+tot_size = 0
+def dns_listen(packet):
+    if packet.haslayer(IP) and packet.haslayer(UDP) and packet.haslayer(DNS) and packet.haslayer(DNSRR):
+
+        dns_packet = {
+            "dst"  : packet[IP].dst,
+            "sport": packet[IP].sport,
+            "dport": packet[IP].dport,
+            "tx_id": packet[DNS].id,
+            "q_url": packet[DNS].qd.qname.decode('utf-8'),
+            "rdata": packet[DNSRR].rdata
+        }
+
+        if isinstance(dns_packet['rdata'], bytes):
+            dns_packet['rdata'] = dns_packet['rdata'].decode('utf-8')
 
 
-import json
+        #print("DNS PACKET: {}".format(type(dns_packet['rdata'])))
 
-import scapy2dict
+        DNS_URL = "http://35.224.66.131:5001/dnstest"
+        #req = requests.post(DNS_URL, json=dns_packet)
+    #make request
 
-millis = int(round(time.time() * 1000))
-sessionName = 'SESSION_' + str(millis)
-URL = 'https://us-central1-stable-house-183720.cloudfunctions.net/pktCtr?sessionName=' +sessionName;
+def packet_listen(packet):
+    global lets
+    global start_time
+    global tot_size
+    if packet.haslayer(IP) and packet.haslayer(TCP):
+        packet_dict = {
+            'src'  : packet[IP].src,
+            'dst'  : packet[IP].dst,
+            'sport': str(packet[IP].sport),
+            'dport': str(packet[IP].dport),
+            'size' : str(len(packet))
+        }
 
-def walk_dict(d):
-    for key, value in d.items():
-        if isinstance(value, dict):
-            walk_dict(value)
+        PACKET_URL = "http://35.224.66.131/flow"
+        URL = "http://35.224.66.131/test"
+        res = requests.post(PACKET_URL, json=packet_dict)
+        # count+=1
+        lats.append(res.elapsed.total_seconds() * 1000)
+        tot_size+=len(packet)
+        if len(lats) % 100 == 0:
+            np_lats = np.array(lats)
+            tail_lat = np.percentile(np_lats, 99)
+            print("Tot_Lat: {}, 99_lat:{}, count:{}, time: {}, size:{}".format(np.sum(np_lats), tail_lat, len(lats), time.time() - start_time, tot_size))
+
+def parse_input_args():
+    arg_parser = argparse.ArgumentParser(add_help=False)
+    arg_parser.add_argument("-i", metavar="listening_interface")
+    arg_parser.add_argument("-r", metavar = "pcap_file")
+    arg_parser.add_argument('-m', metavar='mode')
+    args = arg_parser.parse_args()
+
+    return args.i, args.r, args.m
+
+def parse_expression(expression_list):
+    exp_str = ''
+    for exp in expression_list:
+        exp_str += exp + ' '
+    return exp_str.strip()
+count_packet = 0
+if __name__ == '__main__':
+    interface, pcap_file, mode= parse_input_args()
+
+    if mode == 'dns':
+        if interface != None:
+            sniff(iface=interface, store=0, prn=dns_listen)
+        elif pcap_file != None:
+            sniff(offline = pcap_file, store=0, prn=dns_listen)
         else:
-            if isinstance(value, bytes):
-                d[key] = value.decode('utf-8')
-
-
-def callback():
-    def process(pkt):
-        payload = scapy2dict.to_dict(pkt, strict=True)
-        walk_dict(payload)
-        print(json.dumps(payload, sort_keys=True, indent = 4, separators=(',',':'), ensure_ascii=False))
-        try:
-            #requests.post(URL, data = payload, timeout=10)
-            time.sleep(10)
-        except Exception as e:
-            print("Error occurred: " + str(e));
-            sys.exit(0)
-
-    return process
-
-
-def get_local_ip(interface_name):
-    return netifaces.ifaddresses(interface_name)[netifaces.AF_INET][0]['addr'].encode("UTF-8")
-
-
-def parse_args(argv):
-    hosts_file = ''
-    interface_name = ''
-    try:
-        opts, args = getopt.getopt(argv, "r:i:")
-    except getopt.GetoptError:
-        print('Incorrect format of args. Expected: python dnsdetect.py [-i interface] [-r tracefile] expression')
-        sys.exit(2)
-    l = len(args)
-    if l > 1:
-        print('Too many arguments.  Expected: python dnsdetect.py [-i interface] [-r tracefile] expression')
-        sys.exit(2)
-    if l < 1:
-        print('Too few arguments.  Expected: python dnsdetect.py [-i interface] [-r tracefile] expression')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-r':
-            hosts_file = arg
-        elif opt == "-i":
-            interface_name = arg
-
-    return hosts_file, interface_name, args[0]
-
-
-def get_fallback_default_interface():
-    return netifaces.interfaces()[0]
-
-
-def get_default_interface():
-    gateways = netifaces.gateways()
-    if not gateways:
-        return get_fallback_default_interface()
-    def_gateway = gateways['default']
-    if not def_gateway:
-        return get_fallback_default_interface()
-    return def_gateway[netifaces.AF_INET][1]
-
-
-def main(argv):
-    map = {}
-    # interface = get_default_interface() if interface_name is '' else interface_name
-    interface = get_default_interface()
-    local_ip = get_local_ip(interface)
-    bpf_filt = 'udp src port 53'
-    print('Sniffing session: ' + str(sessionName))
-    sniff(iface=interface, filter=bpf_filt, prn=callback())
-    # else:
-    #     sniff(offline=trace_file, iface=interface, filter=bpf_filt, prn=callback(map, local_ip))
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])
+            default_interface = netifaces.gateways()['default'][netifaces.AF_INET][1]
+            sniff(iface = default_interface, store=0, prn=dns_listen)
+    else:
+        if interface != None:
+            sniff(iface=interface, store=0, prn=packet_listen)
+        elif pcap_file != None:
+            sniff(offline = pcap_file, store=0, prn=packet_listen)
+    np_lats = np.array(lats)
+    tail_lat = np.percentile(np_lats, 99)
+    print("Tot_Lat: {}, 99_lat:{}, count:{}".format(np.sum(np_lats), tail_lat, len(lats)))
